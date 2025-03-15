@@ -1,4 +1,4 @@
-use mlua::{Error as LuaError, Lua, Result as LuaResult, Value};
+use mlua::{Error as LuaError, Lua, Result as LuaResult, Table, Value};
 use std::{fs, path::{Path, PathBuf}, sync::Arc};
 use serde_json::Value as JsonValue;
 use regex::Regex;
@@ -53,6 +53,81 @@ pub fn regex_match<'lua>(_: &'lua Lua, (text, pattern): (String, String)) -> Lua
     } else {
         Ok((None, None, None, None))
     }
+}
+
+pub fn register_git_object(lua: &Lua, src_dir: PathBuf, dst_dir: PathBuf) -> LuaResult<()> {
+    let globals = lua.globals();
+
+    // Register the git object
+    let git_table = lua.create_table()?;
+
+    let git_repo_get_tag_function = lua.create_function(|_, repo: Table| {
+        let repo_path = repo.get::<String>("path").unwrap();
+        let repo = git2::Repository::open(&repo_path).unwrap();
+
+        let tags = repo.tag_names(None).unwrap();
+        let tags: Vec<String> = tags.iter().map(|t| t.unwrap().to_string()).collect();
+
+        Ok(tags)
+    })?;
+
+    let git_repo_get_revision_function = lua.create_function(|_, repo: Table| {
+        let repo_path = repo.get::<String>("path").unwrap();
+        let repo = git2::Repository::open(&repo_path).unwrap();
+
+        let head = repo.head().unwrap();
+        let head_oid = head.target().unwrap();
+        let head_commit = repo.find_commit(head_oid).unwrap();
+        let head_commit_id = head_commit.id().to_string();
+
+        Ok(head_commit_id)
+    })?;
+
+    // Register the git clone function
+    let git_clone_src_dir = src_dir.clone();
+    let git_close_git_repo_get_tag_function = git_repo_get_tag_function.clone();
+    let git_close_git_repo_get_revision_function = git_repo_get_revision_function.clone();
+    let git_clone_function = lua.create_function(move |ilua, (src, dest): (String, Option<String>)| {
+        println!("Cloning git repository from {} to {}", src, sanitize_path(&git_clone_src_dir.clone(), &dest.clone().unwrap_or_else(|| ".".to_string())).unwrap().to_str().unwrap());
+
+        // ensure the destination exists
+        if let Some(parent) = sanitize_path(&git_clone_src_dir, &dest.clone().unwrap_or_else(|| ".".to_string())).unwrap().parent() {
+            if !parent.exists() {
+                println!("Creating parent directories for {:?}", parent);
+                fs::create_dir_all(parent).map_err(|e| LuaError::RuntimeError(e.to_string()))?;
+            }
+        }
+
+        let repo = git2::Repository::clone(&src, sanitize_path(&git_clone_src_dir, &dest.unwrap_or_else(|| ".".to_string())).unwrap()).map_err(|e| LuaError::RuntimeError(e.to_string()))?;
+
+        let table = ilua.create_table()?;
+        table.set("path", repo.path().to_str().unwrap_or("")).map_err(|e| LuaError::RuntimeError(e.to_string()))?;
+        table.set("get_tag", git_close_git_repo_get_tag_function.clone()).map_err(|e| LuaError::RuntimeError(e.to_string()))?;
+        table.set("get_revision", git_close_git_repo_get_revision_function.clone()).map_err(|e| LuaError::RuntimeError(e.to_string()))?;
+
+        Ok(table)
+    })?;
+    git_table.set("clone", git_clone_function)?;
+
+    // Register the git load function
+    let git_load_src_dir = src_dir.clone();
+    let git_load_git_repo_get_tag_function = git_repo_get_tag_function.clone();
+    let git_load_git_repo_get_revision_function = git_repo_get_revision_function.clone();
+    let git_load_function = lua.create_function(move |ilua, repo: String| {
+        let repo = git2::Repository::open(sanitize_path(&git_load_src_dir, &repo).unwrap()).map_err(|e| LuaError::RuntimeError(e.to_string()))?;
+
+        let table = ilua.create_table()?;
+        table.set("path", repo.path().to_str().unwrap_or("")).map_err(|e| LuaError::RuntimeError(e.to_string()))?;
+        table.set("get_tag", git_load_git_repo_get_tag_function.clone()).map_err(|e| LuaError::RuntimeError(e.to_string()))?;
+        table.set("get_revision", git_load_git_repo_get_revision_function.clone()).map_err(|e| LuaError::RuntimeError(e.to_string()))?;
+
+        Ok(table)
+    })?;
+    git_table.set("load", git_load_function)?;
+
+    globals.set("git", git_table)?;
+
+    Ok(())
 }
 
 /// Register all Lua functions

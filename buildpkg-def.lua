@@ -107,7 +107,7 @@ git = {
     --- 
     --- @param url string
     --- @param destination string?
-    --- @return nil
+    --- @return git_repo
     clone = function(url, destination) end,
 
     --- Load a git repository.

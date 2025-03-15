@@ -1,4 +1,4 @@
-use lua_functions::register_lua_functions;
+use lua_functions::{register_git_object, register_lua_functions};
 use mlua::{FromLuaMulti, Function, IntoLuaMulti, Lua, Table, Value};
 use std::{fs, path::{Path, PathBuf}, process};
 use clap::{command, value_parser, Arg};
@@ -214,6 +214,7 @@ fn main() {
     let pkg_dir_value = working_dir.join("pkg");
 
     register_lua_functions(&lua, src_dir_value.clone(), pkg_dir_value.clone()).unwrap();
+    register_git_object(&lua, src_dir_value.clone(), pkg_dir_value.clone()).unwrap();
 
     let lua_code = fs::read_to_string(buildpkg_lua).unwrap();
 
@@ -239,6 +240,9 @@ fn main() {
         std::process::exit(1);
     }
 
+    println!("Getting sources...");
+    run_function::<()>(&lua, "SOURCES", ());
+
     if package_info.version.is_none() {
         package_info.version = run_function(&lua, "VERSION", ());
     }
@@ -250,11 +254,9 @@ fn main() {
         std::process::exit(1);
     }
 
-    // call the PREPARE function
     println!("Preparing...");
     run_function::<()>(&lua, "PREPARE", ());
 
-    // call the PACKAGE function
     println!("Packaging...");
     run_function::<()>(&lua, "PACKAGE", ());
 
@@ -316,6 +318,21 @@ fn visit_dirs(dir: &Path, paths: &mut Vec<String>) -> std::io::Result<()> {
     }
     
     Ok(())
+}
+
+fn run_function_if_exists<R: FromLuaMulti>(lua: &Lua, function_name: &str, args: impl IntoLuaMulti) -> Option<R> {
+    let globals = lua.globals();
+    let function_res = globals.get(function_name);
+    if let Err(_) = function_res {
+        return None;
+    }
+    let function: Function = function_res.unwrap();
+
+    let res = function.call::<R>(args);
+    match res {
+        Ok(r) => Some(r),
+        Err(_) => None,
+    }
 }
 
 fn run_function<R: FromLuaMulti>(lua: &Lua, function_name: &str, args: impl IntoLuaMulti) -> R {

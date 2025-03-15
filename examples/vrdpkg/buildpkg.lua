@@ -1,7 +1,7 @@
 INFO = {
   name = "vrdpkg",
-  description = "A package manager for Veridium",
-  url = "https://github.com/veridium/vrdpkg",
+  description = "A package manager for Veridian",
+  url = "https://github.com/veridian-linux/vrdpkg",
   maintainers = {"Iris Junckes <me@junckes.dev>"},
   license = "MIT",
   dev = true,
@@ -13,7 +13,8 @@ INFO = {
 --- 
 --- @return nil
 function SOURCES()
-  git.clone(INFO.url .. ".git", "/vrdpkg")
+  local repo = git.clone(INFO.url .. ".git", "/vrdpkg")
+  print(repo.path)
 end
 
 --- Returns the version of the package in the format "major.minor.patch-revision"
