@@ -90,15 +90,20 @@ PKG_DIR = ""
 --- @class git_repo
 --- @field path string
 git_repo = {
-    --- Get the tag of the repository.
+    --- Get the tags of the repository.
     --- 
-    --- @return string
-    get_tag = function() end,
+    --- @nodiscard
+    --- @param self git_repo
+    --- @return string[]
+    get_tags = function(self) end,
 
     --- Get the revision of the repository.
     --- 
+    --- @nodiscard
+    --- @param self git_repo
+    --- @param from string
     --- @return string
-    get_revision = function() end
+    get_revision = function(self, from) end
 }
 
 --- @class git

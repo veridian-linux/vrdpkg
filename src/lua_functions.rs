@@ -61,7 +61,7 @@ pub fn register_git_object(lua: &Lua, src_dir: PathBuf, dst_dir: PathBuf) -> Lua
     // Register the git object
     let git_table = lua.create_table()?;
 
-    let git_repo_get_tag_function = lua.create_function(|_, repo: Table| {
+    let git_repo_get_tags_function = lua.create_function(|_, repo: Table| {
         let repo_path = repo.get::<String>("path").unwrap();
         let repo = git2::Repository::open(&repo_path).unwrap();
 
@@ -71,21 +71,31 @@ pub fn register_git_object(lua: &Lua, src_dir: PathBuf, dst_dir: PathBuf) -> Lua
         Ok(tags)
     })?;
 
-    let git_repo_get_revision_function = lua.create_function(|_, repo: Table| {
+    let git_repo_get_revision_function = lua.create_function(|_, (repo, from): (Table, String)| {
         let repo_path = repo.get::<String>("path").unwrap();
         let repo = git2::Repository::open(&repo_path).unwrap();
 
-        let head = repo.head().unwrap();
-        let head_oid = head.target().unwrap();
-        let head_commit = repo.find_commit(head_oid).unwrap();
-        let head_commit_id = head_commit.id().to_string();
+        // get number of commits since tag or commit called from
+        let from = repo.revparse_single(&from).unwrap();
+        let from = from.peel_to_commit().unwrap();
+        let from_id = from.id();
 
-        Ok(head_commit_id)
+        let head = repo.head().unwrap();
+        let head = head.peel_to_commit().unwrap();
+        let head_commit_id = head.id();
+
+        let mut revwalk = repo.revwalk().unwrap();
+        revwalk.push(head_commit_id).unwrap();
+        revwalk.hide(from_id).unwrap();
+
+        let count = revwalk.count();
+
+        Ok(count)
     })?;
 
     // Register the git clone function
     let git_clone_src_dir = src_dir.clone();
-    let git_close_git_repo_get_tag_function = git_repo_get_tag_function.clone();
+    let git_close_git_repo_get_tags_function = git_repo_get_tags_function.clone();
     let git_close_git_repo_get_revision_function = git_repo_get_revision_function.clone();
     let git_clone_function = lua.create_function(move |ilua, (src, dest): (String, Option<String>)| {
         println!("Cloning git repository from {} to {}", src, sanitize_path(&git_clone_src_dir.clone(), &dest.clone().unwrap_or_else(|| ".".to_string())).unwrap().to_str().unwrap());
@@ -101,9 +111,9 @@ pub fn register_git_object(lua: &Lua, src_dir: PathBuf, dst_dir: PathBuf) -> Lua
         let repo = git2::Repository::clone(&src, sanitize_path(&git_clone_src_dir, &dest.unwrap_or_else(|| ".".to_string())).unwrap()).map_err(|e| LuaError::RuntimeError(e.to_string()))?;
 
         let table = ilua.create_table()?;
-        table.set("path", repo.path().to_str().unwrap_or("")).map_err(|e| LuaError::RuntimeError(e.to_string()))?;
-        table.set("get_tag", git_close_git_repo_get_tag_function.clone()).map_err(|e| LuaError::RuntimeError(e.to_string()))?;
-        table.set("get_revision", git_close_git_repo_get_revision_function.clone()).map_err(|e| LuaError::RuntimeError(e.to_string()))?;
+        table.set("path", repo.path().parent().unwrap().to_str().unwrap_or(""))?;
+        table.set("get_tags", git_close_git_repo_get_tags_function.clone())?;
+        table.set("get_revision", git_close_git_repo_get_revision_function.clone())?;
 
         Ok(table)
     })?;
@@ -111,14 +121,14 @@ pub fn register_git_object(lua: &Lua, src_dir: PathBuf, dst_dir: PathBuf) -> Lua
 
     // Register the git load function
     let git_load_src_dir = src_dir.clone();
-    let git_load_git_repo_get_tag_function = git_repo_get_tag_function.clone();
+    let git_load_git_repo_get_tags_function = git_repo_get_tags_function.clone();
     let git_load_git_repo_get_revision_function = git_repo_get_revision_function.clone();
     let git_load_function = lua.create_function(move |ilua, repo: String| {
         let repo = git2::Repository::open(sanitize_path(&git_load_src_dir, &repo).unwrap()).map_err(|e| LuaError::RuntimeError(e.to_string()))?;
 
         let table = ilua.create_table()?;
-        table.set("path", repo.path().to_str().unwrap_or("")).map_err(|e| LuaError::RuntimeError(e.to_string()))?;
-        table.set("get_tag", git_load_git_repo_get_tag_function.clone()).map_err(|e| LuaError::RuntimeError(e.to_string()))?;
+        table.set("path", repo.path().parent().unwrap().to_str().unwrap_or("")).map_err(|e| LuaError::RuntimeError(e.to_string()))?;
+        table.set("get_tags", git_load_git_repo_get_tags_function.clone()).map_err(|e| LuaError::RuntimeError(e.to_string()))?;
         table.set("get_revision", git_load_git_repo_get_revision_function.clone()).map_err(|e| LuaError::RuntimeError(e.to_string()))?;
 
         Ok(table)

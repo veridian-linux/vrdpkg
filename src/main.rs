@@ -169,17 +169,23 @@ fn main() {
             .help("The project to build")
             .value_parser(value_parser!(PathBuf))
         )
-        .arg(Arg::new("clean")
+        .arg(Arg::new("clean_after")
             .short('C')
             .long("clean")
             .required(false)
             .num_args(0)
-            .help("Clean the project after building")
-        )
+            .help("Clean the project after building"))
+        .arg(Arg::new("clean_before")
+            .short('c')
+            .long("clean-before")
+            .required(false)
+            .num_args(0)
+            .help("Clean the project before building"))
         .get_matches();
 
     let project = matches.get_one::<PathBuf>("project").unwrap();
-    let clean_project_after = matches.contains_id("clean");
+    let clean_project_before = matches.contains_id("clean_before");
+    let clean_project_after = matches.contains_id("clean_after");
 
     // check if the project is either a directory containing a buildpkg.lua file or a buildpkg.lua file
     let buildpkg_lua = if project.is_dir() {
@@ -198,6 +204,16 @@ fn main() {
     } else {
         fs::canonicalize(project.parent().unwrap().to_path_buf()).unwrap()
     };
+
+    if clean_project_before {
+        if working_dir.join("src").exists() {
+            fs::remove_dir_all(working_dir.join("src")).unwrap();
+        }
+
+        if working_dir.join("pkg").exists() {
+            fs::remove_dir_all(working_dir.join("pkg")).unwrap();
+        }
+    }
 
     let lua = Lua::new();
 
@@ -247,6 +263,25 @@ fn main() {
         package_info.version = run_function(&lua, "VERSION", ());
     }
 
+    if package_info.version.is_none() {
+        eprintln!("Error: version field missing and VERSION function returned None");
+        std::process::exit(1);
+    }
+
+    let version = package_info.version.clone().unwrap();
+
+    // check that version conforms to major.minor.patch-revision format
+    let version_parts: Vec<&str> = version.split('-').collect();
+    if version_parts.len() > 2 {
+        eprintln!("Error: version field does not conform to major.minor.patch-revision format");
+        std::process::exit(1);
+    }
+    let version_semver_parts: Vec<&str> = version_parts[0].split('.').collect();
+    if version_semver_parts.len() != 3 {
+        eprintln!("Error: version field does not conform to major.minor.patch-revision format");
+        std::process::exit(1);
+    }
+
     println!("\n- {} {} ({}) maintained by {}\n", package_info.name, package_info.version.clone().unwrap(), package_info.license, package_info.maintainers.join(", "));
 
     if !package_info.arch.contains(&std::env::consts::ARCH.to_string()) {
@@ -292,8 +327,13 @@ fn main() {
     }
 
     if clean_project_after {
-        fs::remove_dir_all(working_dir.join("src")).unwrap();
-        fs::remove_dir_all(working_dir.join("pkg")).unwrap();
+        if working_dir.join("src").exists() {
+            fs::remove_dir_all(working_dir.join("src")).unwrap();
+        }
+
+        if working_dir.join("pkg").exists() {
+            fs::remove_dir_all(working_dir.join("pkg")).unwrap();
+        }
     }
 }
 

@@ -22,8 +22,13 @@ end
 --- @return string
 function VERSION()
   local src = git.load("/vrdpkg")
-  local tag = src.get_tag()
-  local revision = src.get_revision()
+  local tag = src:get_tags()[0]
+
+  if tag == nil then
+    error("No tags found")
+  end
+
+  local revision = src:get_revision(tag)
 
   return tag .. "-" .. revision
 end

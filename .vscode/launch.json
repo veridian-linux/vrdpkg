@@ -20,7 +20,7 @@
                     "kind": "bin"
                 }
             },
-            "args": ["./examples/vrdpkg/buildpkg.lua", "-C"],
+            "args": ["./examples/vrdpkg/buildpkg.lua", "-Cc"],
             "cwd": "${workspaceFolder}"
         },
         {
