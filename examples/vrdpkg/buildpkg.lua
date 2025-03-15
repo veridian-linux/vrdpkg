@@ -1,0 +1,49 @@
+INFO = {
+  name = "vrdpkg",
+  description = "A package manager for Veridium",
+  url = "https://github.com/veridium/vrdpkg",
+  maintainers = {"Iris Junckes <me@junckes.dev>"},
+  license = "MIT",
+  dev = true,
+  provides = {"vrdpkg"},
+  arch = {"x86_64", "aarch64"},
+}
+
+--- Download sources
+--- 
+--- @return nil
+function SOURCES()
+  git.clone(INFO.url .. ".git", "/vrdpkg")
+end
+
+--- Returns the version of the package in the format "major.minor.patch-revision"
+--- 
+--- @return string
+function VERSION()
+  local src = git.load("/vrdpkg")
+  local tag = src.get_tag()
+  local revision = src.get_revision()
+
+  return tag .. "-" .. revision
+end
+
+--- Prepare the sources
+--- 
+--- @return nil
+function PREPARE()
+
+end
+
+--- Build the package
+--- 
+--- @return nil
+function BUILD()
+
+end
+
+--- Package the built files
+--- 
+--- @return nil
+function PACKAGE()
+
+end

@@ -1,0 +1,29 @@
+[package]
+name = "vrdpkg"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+clap = { version = "4.5.32", features = ["cargo"]}
+mlua = { version = "0.10.3", features = ["lua54", "vendored"] }
+reqwest = { version = "0.12.14", features = ["blocking"]}
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0"
+regex = "1.11.1"
+sha2 = "0.10.8"
+path-clean = "1.0.1"
+thiserror = "2.0.12"
+tar = "0.4.44"
+bzip2 = "0.5.2"
+flate2 = "1.1.0"
+xz2 = "0.1.7"
+zstd = "0.13.3"
+walkdir = "2.5.0"
+git2 = "0.20.0"
+
+[profile.release]
+debug = "none"
+strip = true
+lto = "fat"
+opt-level = "z"
+codegen-units = 1
